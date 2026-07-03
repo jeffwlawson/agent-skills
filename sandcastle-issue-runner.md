@@ -2,11 +2,12 @@
 name: sandcastle-issue-runner
 description: >
   Launches a Sandcastle AFK run against this repo's Sandcastle-labeled issue backlog.
-  Use when the user says things like "run sandcastle", "kick off the sandcastle run",
-  "start the night shift", "let's ship the backlog", "run the planner now" — or when
-  sandcastle-setup hands off here right after its smoke test ("ready to run a smoke-test
-  issue through Sandcastle"). Takes no issue number or mode argument: the planner inside
-  `npm run ship` reads the whole labeled backlog itself, every round.
+  Always use this skill when the user wants to kick off, run, start, or resume unattended
+  Sandcastle work — phrases like "run sandcastle", "kick off the sandcastle run", "start
+  the night shift", "let's ship the backlog", "run the planner now", "work through the
+  AFK issues" — or when sandcastle-setup hands off here right after its smoke test ("ready
+  to run a smoke-test issue through Sandcastle"). Takes no issue number or mode argument:
+  the planner inside `npm run ship` reads the whole labeled backlog itself, every round.
 ---
 
 # sandcastle-issue-runner
@@ -39,13 +40,33 @@ Check that `.sandcastle` exists at the workspace root.
 
 1. Confirm `.sandcastle` exists (see Precondition above).
 
-2. Fetch a live GitHub token for this session only — never write it to `.env`:
+2. Fetch a live GitHub token for this session only — never write it to `.env` — and
+   **verify it actually came back non-empty before proceeding.** Confirmed real failure:
+   `gh auth token` can fail silently into an empty or error-text assignment if the host
+   isn't authenticated (expired session, never logged in), and PowerShell doesn't raise
+   anything visible for that — `$env:GH_TOKEN` just ends up set to something falsy but
+   *present*. A present-but-bad `GH_TOKEN` in the environment is exactly as damaging as the
+   empty `.env` line this same setup already guards against: it silently overrides any
+   valid keychain-based `gh` auth instead of being treated as missing. Don't just run the
+   assignment and move on — check the result:
    ```powershell
    $env:GH_TOKEN = (gh auth token)
+   if ([string]::IsNullOrWhiteSpace($env:GH_TOKEN)) {
+     Write-Error "gh auth token returned empty — host is not authenticated. Run 'gh auth login' first."
+     return
+   }
    ```
-   This pairs with `sandcastle-setup` leaving `GH_TOKEN=` commented out in
-   `.sandcastle/.env`. If either skill changes, keep that pairing intact — a stale empty
-   `GH_TOKEN=` in `.env` silently overrides the system's authenticated `gh` keyring.
+   If this fails, stop here and tell the user plainly to run `gh auth login` — don't launch
+   the window with a bad token, since the failure won't surface until deep inside the
+   container, on a command like `gh issue list`, far from the actual cause.
+
+   This pairs with `sandcastle-setup` leaving `GH_TOKEN=` **blank** (present, but empty) in
+   `.sandcastle/.env` — confirmed necessary, not just tidy: Sandcastle's `.env` resolver
+   only falls through to `process.env` for keys that exist as a line in `.env` at all, even
+   blank ones. A deleted line is never checked against `process.env`, so removing it
+   entirely breaks this token fetch too. If either skill changes, keep that pairing intact
+   — the danger case is a *populated* `GH_TOKEN=` with a stale or wrong value, which would
+   win over a good live-fetched token here, not a blank one.
 
 3. Prepend Git-for-Windows' `usr\bin` to PATH for this window, ahead of everything else.
    Confirmed fix for a real `spawn cp ENOENT` — Sandcastle shells out to `cp` to seed
@@ -62,7 +83,16 @@ Check that `.sandcastle` exists at the workspace root.
 
 5. Tell the user the window launched and that this skill won't report back further —
    they'll watch progress in the new window, and PRs land per-branch as each branch's
-   review passes (once the push+PR step is wired in).
+   review passes.
+
+## If you see `could not add label` or `gh: please run gh auth login` inside the container
+
+That symptom surfaces deep in a `!`gh issue list`` ``-style prompt expansion or label call
+— far from its actual cause. It does not mean `gh auth login` needs to run *inside* the
+sandbox; Sandcastle has no mechanism for that and isn't supposed to need one. It means
+step 2 above let a bad/empty `GH_TOKEN` through on the host before launch. Re-run step 2's
+verification manually (`gh auth token` should print a real token starting with `gh[ospu]_`,
+not blank or an error) before relaunching.
 
 ## The one legitimate exception
 
