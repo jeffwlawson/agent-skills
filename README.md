@@ -27,9 +27,19 @@ them.
 ## Install / usage
 
 These are plain Claude-skill-format `.md` files with YAML frontmatter (`name` +
-`description`). Antigravity 2.0 reads this format directly — no conversion needed. Drop
-them into a project's `.claude/commands/` or `.agents/workflows/` directory (whichever
-your agent of choice scans) the same way you'd install any other skill.
+`description`). Antigravity 2.0 reads this format directly — no conversion needed.
+
+These run from a **global skills path**, not copied per-project — one live copy that every
+Antigravity/Claude Code session reads, rather than N per-project copies to keep in sync.
+This repo is the backup and version history for that global copy, not the thing itself:
+- Edit a skill in place at the global path, same as before.
+- When a change is worth keeping, copy it from the global path into this repo and commit —
+  that's the "if this machine dies, here's what to restore" copy.
+- New machine or reinstall → copy from this repo back out to the global path, once.
+
+One-directional sync (global path → repo), on purpose, not automatic — no git pull, no
+symlink, no submodule. Skills change rarely enough that manual, deliberate propagation
+costs less than the complexity of keeping something auto-synced.
 
 Both skills are user-invoked: they trigger on natural-language intent in their
 `description` frontmatter (Antigravity has no slash-command support yet), not on a typed
