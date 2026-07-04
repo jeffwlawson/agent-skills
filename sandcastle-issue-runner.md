@@ -40,7 +40,31 @@ Check that `.sandcastle` exists at the workspace root.
 
 1. Confirm `.sandcastle` exists (see Precondition above).
 
-2. Fetch a live GitHub token for this session only — never write it to `.env` — and
+2. **Sync to a clean, up-to-date `main` before doing anything else — automatically, not as
+   a reminder.** Confirmed root cause of a real bug: every fan-out branch this run creates
+   forks from whatever the host's current branch/state is at launch time, not explicitly
+   from `main`. Launching from a stale or dirty branch means every PR this round produces
+   diffs against the wrong baseline. Don't ask the user to confirm they're on `main` — check
+   and fix it directly, and only stop if there's something genuinely unsafe to resolve
+   automatically:
+   ```powershell
+   $status = git status --porcelain
+   if ($status) {
+     Write-Error "Working tree is dirty. Commit, stash, or discard changes before running Sandcastle. Stopping."
+     return
+   }
+   git checkout main
+   git fetch origin
+   git pull origin main --ff-only
+   ```
+   `--ff-only` is deliberate: if `pull` can't fast-forward (local `main` has diverged from
+   `origin/main` some other way), it fails loudly instead of creating a merge commit or
+   silently succeeding on the wrong state — surface that error to the user rather than
+   working around it. A dirty working tree is the one case worth stopping for entirely
+   rather than resolving automatically — stashing on the user's behalf risks losing track
+   of work they didn't mean to set aside.
+
+3. Fetch a live GitHub token for this session only — never write it to `.env` — and
    **verify it actually came back non-empty before proceeding.** Confirmed real failure:
    `gh auth token` can fail silently into an empty or error-text assignment if the host
    isn't authenticated (expired session, never logged in), and PowerShell doesn't raise
@@ -68,20 +92,20 @@ Check that `.sandcastle` exists at the workspace root.
    — the danger case is a *populated* `GH_TOKEN=` with a stale or wrong value, which would
    win over a good live-fetched token here, not a blank one.
 
-3. Prepend Git-for-Windows' `usr\bin` to PATH for this window, ahead of everything else.
+4. Prepend Git-for-Windows' `usr\bin` to PATH for this window, ahead of everything else.
    Confirmed fix for a real `spawn cp ENOENT` — Sandcastle shells out to `cp` to seed
    `node_modules` into the worktree, and Windows has no native `cp`:
    ```powershell
    $env:PATH = "C:\Tools\Git\usr\bin;$env:PATH"
    ```
 
-4. Launch one detached window, titled for the repo, and return — don't wait on it:
+5. Launch one detached window, titled for the repo, and return — don't wait on it:
    ```powershell
    Start-Process powershell -ArgumentList "-NoExit", "-Command", `
      "`$Host.UI.RawUI.WindowTitle = 'Sandcastle — <repo-name>'; npm run ship"
    ```
 
-5. Tell the user the window launched and that this skill won't report back further —
+6. Tell the user the window launched and that this skill won't report back further —
    they'll watch progress in the new window, and PRs land per-branch as each branch's
    review passes.
 
@@ -90,7 +114,7 @@ Check that `.sandcastle` exists at the workspace root.
 That symptom surfaces deep in a `!`gh issue list`` ``-style prompt expansion or label call
 — far from its actual cause. It does not mean `gh auth login` needs to run *inside* the
 sandbox; Sandcastle has no mechanism for that and isn't supposed to need one. It means
-step 2 above let a bad/empty `GH_TOKEN` through on the host before launch. Re-run step 2's
+step 3 above let a bad/empty `GH_TOKEN` through on the host before launch. Re-run step 3's
 verification manually (`gh auth token` should print a real token starting with `gh[ospu]_`,
 not blank or an error) before relaunching.
 
