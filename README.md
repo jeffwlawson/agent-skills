@@ -2,7 +2,7 @@
 
 This repo used to hold the two Sandcastle night-shift skills (`sandcastle-setup`,
 `sandcastle-issue-runner`) as a backup for the live copy at `~/.claude/skills/`. Both
-migrated to
+have been migrated to
 [jeffwlawson/sandcastle-config](https://github.com/jeffwlawson/sandcastle-config/tree/main/skills) —
 canonical source, version history, and the ADR explaining the move now live there,
 alongside the `main.mts`/`review-pr.mts` orchestration those skills bootstrap and launch.
